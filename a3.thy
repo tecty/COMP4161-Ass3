@@ -125,7 +125,7 @@ lemma arr_is_valid_update_heap:
 
 lemma arr_is_valid_conv_all_nth:
   "arr_is_valid s p n \<longleftrightarrow> (\<forall>i<n. is_valid_w32 s (p +\<^sub>p int i))"
-  by (induct n arbitrary: p)
+  by (induct n arbitrary: p)                 
     (simp add: All_less_Suc2 pointer_add_ldistrib_add)+
 
 lemma arr_is_validD:
@@ -150,6 +150,7 @@ primrec
 where
     "arr_list s p 0 = []"
   | "arr_list s p (Suc n) = (heap_w32 s p) # arr_list s (p +\<^sub>p 1) n"
+
 
 lemma heap_to_arr_list_lookup:
   fixes i :: int
@@ -399,15 +400,17 @@ lemma invariant_preservation:
     qed
 
 text \<open> Show reverse is correct \<close>
-lemma heap_udpate_to_array:
-  "\<lbrakk> wellbehaved_pointers p n \<and> i \<le> n \<and> arr_is_valid s p n\<rbrakk> \<Longrightarrow>
-    arr_list (heap_w32_update (\<lambda>a. a(p +\<^sub>p int i := val)) s) p n 
-      = (arr_list s p n)[i := val]"
-  apply (clarsimp)
+
+lemma heap_update_to_list_update: 
+  assumes 
+    "is_valid_w32 s p" 
+  shows
+    "heap_w32 (heap_w32_update (\<lambda>a. a(p := val)) s) p  = val"
+  using assms 
+  by (simp add: fun_upd_same) 
+
+find_theorems arr_list
   
-
-  oops 
-
 lemma reverse_correct:
   "\<lbrace> \<lambda>s. wellbehaved_pointers p n \<and>
          length xs < UINT_MAX \<and>
@@ -432,7 +435,8 @@ lemma reverse_correct:
         and M ="\<lambda> (i , _ ) .  (length xs) - i "])
   apply (wp ; clarsimp)+
   apply (safe)
-  apply (simp_all)
+  apply (auto simp add: arr_list_heap_update_simps)
+    
   
   
   
