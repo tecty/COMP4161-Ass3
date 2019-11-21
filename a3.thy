@@ -231,13 +231,13 @@ subsection \<open> Reverse invariant \<close>
 (*  Replace True with the correct invariant in each of the following three definitions. *)
 
 definition left_invariant :: "word32 list \<Rightarrow> word32 list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
-  "left_invariant xs xs' i j \<equiv> \<forall>k. k < i \<longrightarrow> True"
+  "left_invariant xs xs' i j \<equiv> \<forall>k. k < i \<longrightarrow> xs' ! k = xs ! (length xs - k - 1)"
 
 definition middle_invariant :: "word32 list \<Rightarrow> word32 list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
-  "middle_invariant xs xs' i j \<equiv> \<forall>k. i \<le> k \<longrightarrow> k \<le> j \<longrightarrow> True"
+  "middle_invariant xs xs' i j \<equiv> \<forall>k. i \<le> k \<longrightarrow> k \<le> j \<longrightarrow> xs' ! k = xs ! k"
 
 definition right_invariant :: "word32 list \<Rightarrow> word32 list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
-  "right_invariant xs xs' i j \<equiv> \<forall>k. j < k \<longrightarrow> k < length xs \<longrightarrow> True"
+  "right_invariant xs xs' i j \<equiv> \<forall>k. j < k \<longrightarrow> k < length xs \<longrightarrow> xs'!k = xs!(length xs - k - 1)"
 
 definition reverse_inv :: "word32 list \<Rightarrow> word32 list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" where
   "reverse_inv xs xs' i j \<equiv>
@@ -251,6 +251,7 @@ lemmas reverse_invariant_def = left_invariant_def middle_invariant_def right_inv
 (* Replace SOMETHING in the following lemmas by something that would allow you  
     to prove reverse_correct. *)
 
+
 lemma left_invariant_step:
   assumes
     "length xs' = length xs"
@@ -258,8 +259,13 @@ lemma left_invariant_step:
     "middle_invariant xs xs' i (length xs - Suc i)"
     "left_invariant xs xs' i (length xs - Suc i)"
   shows
-    "left_invariant xs SOMETHING (Suc i) (length xs - Suc (Suc i))"
-  oops
+    "left_invariant xs 
+    (xs'[i := xs' ! (length xs - Suc i),length xs - Suc i:= xs'! i])
+    (Suc i) (length xs - Suc (Suc i))"
+  using assms 
+  unfolding left_invariant_def middle_invariant_def 
+  apply clarsimp
+  by (metis (no_types, hide_lams) less_imp_diff_less linorder_neqE_nat not_less_eq nth_list_update_eq nth_list_update_neq)
 
 lemma right_invariant_step:
   assumes
@@ -268,8 +274,30 @@ lemma right_invariant_step:
     "middle_invariant xs xs' i (length xs - Suc i)"
     "right_invariant xs xs' i (length xs - Suc i)"
   shows
-    "right_invariant xs SOMETHING (Suc i) (length xs - Suc (Suc i))"
-  oops
+    "right_invariant xs 
+    (xs'[i := xs' ! (length xs - Suc i),length xs - Suc i:= xs'! i]) 
+    (Suc i) (length xs - Suc (Suc i))"
+  using assms 
+  unfolding middle_invariant_def right_invariant_def 
+  apply clarsimp 
+  proof -
+    fix k :: nat
+    assume a1: "length xs - Suc (Suc i) < k"
+    assume a2: "\<forall>k>length xs - Suc i. k < length xs \<longrightarrow> xs' ! k = xs ! (length xs - Suc k)"
+    assume a3: "k < length xs"
+    have f4: "length xs - Suc i = k \<or> \<not> k < length xs - Suc i"
+      using a1 by (metis (no_types) leq_minus_split less_Suc_eq_le nat_less_le not_less_eq)
+    have "\<not> length xs - Suc i \<le> i"
+      by (meson assms(2) less_Suc_eq_le not_less_eq)
+    then have f5: "i \<le> length xs"
+      by (meson i_hate_words_helper nat_le_linear)
+    have f6: "\<not> length xs < i"
+      by (meson assms(2) less_Suc_eq less_imp_diff_less not_less_eq)
+    have "\<forall>n. n - Suc n = 0"
+      by simp
+    then show "xs'[i := xs ! (length xs - Suc i), length xs - Suc i := xs ! i] ! k = xs ! (length xs - Suc k)"
+      using f6 f5 f4 a3 a2 by (metis (no_types) Suc_diff_Suc assms(1) assms(2) diff_diff_cancel length_list_update linorder_neqE_nat not_less_zero nth_list_update_eq nth_list_update_neq)
+  qed
 
 lemma middle_invariant_step:
   assumes
@@ -277,9 +305,11 @@ lemma middle_invariant_step:
     "i < length xs - Suc i"
     "middle_invariant xs xs' i (length xs - Suc i)"
   shows
-    "middle_invariant xs SOMETHING
+    "middle_invariant xs 
+    (xs'[i := xs' ! (length xs - Suc i),length xs - Suc i:= xs'! i])
      (Suc i) (length xs - Suc (Suc i))"
-  oops
+  using assms unfolding middle_invariant_def by clarsimp 
+
 
 text \<open> Show the precondition implies the invariant \<close>
 lemma pre_impl_inv:
@@ -291,28 +321,92 @@ lemma pre_impl_inv:
   shows
     "xs \<noteq> []"
     "reverse_inv (arr_list s p n) (arr_list s p n) 0 (n - Suc 0)"
-  oops
-
+  using assms
+  unfolding reverse_inv_def left_invariant_def middle_invariant_def right_invariant_def
+  by (auto simp add: arr_list_empty_iff arr_list_length)
+   
 text \<open> Show the invariant implies the postcondition \<close>
+
+lemma left_all_is_rev:
+  "left_invariant xs (rev(xs)) (length xs - 1) 0"
+  unfolding left_invariant_def 
+  by (simp add: nth_rev)
+
+lemma 
+  "i < length xs \<longrightarrow> left_invariant xs (rev(xs)) i (length xs -i -1)"
+  unfolding left_invariant_def
+  by (simp add: nth_rev)
+
+lemma for_k_impl_rev:
+  "length xs = length ys \<Longrightarrow>  \<forall>k. k < length xs \<longrightarrow> ys! k  = xs ! (length xs - k - 1) \<Longrightarrow> ys = rev xs"
+  apply clarsimp
+  apply (induct xs  arbitrary:ys )
+  apply simp 
+  by (metis length_rev nth_equalityI nth_rev_alt rev_rev_ident) 
+
 lemma inv_impl_post:
   assumes
     "reverse_inv xs (arr_list s p (length xs)) r (length xs - Suc r)"
     "arr_is_valid s p (length xs)"
     "length xs - Suc r \<le> r"
   shows "arr_list s p (length xs) = rev xs"
-  oops
+  using assms
+  unfolding reverse_inv_def left_invariant_def middle_invariant_def right_invariant_def
+  apply clarsimp
+  using for_k_impl_rev 
+  by (smt arr_list_length diff_diff_cancel length_rev less_imp_diff_less linorder_neqE_nat
+      nat_less_le nth_equalityI rev_nth) 
+  
 
-  text \<open> Show the invariant is preserved by the loop \<close>
+text \<open> Show the invariant is preserved by the loop \<close>
 lemma invariant_preservation:
   assumes
     "i < length xs - Suc i"
     "arr_is_valid s p (length xs)"
     "reverse_inv xs (arr_list s p (length xs)) i (length xs - Suc i)"
   shows
-    "reverse_inv xs SOMETHING (Suc i) (length xs - Suc (Suc i))"
-  oops
+    "reverse_inv xs
+    ((arr_list s p (length xs))[i := xs ! (length xs - Suc i),length xs - Suc i:= xs! i])
+     (Suc i) (length xs - Suc (Suc i))"
+  using assms 
+  unfolding reverse_inv_def left_invariant_def middle_invariant_def right_invariant_def
+  apply safe 
+    apply clarsimp 
+    apply (metis (no_types, hide_lams) arr_list_length less_antisym less_imp_diff_less not_less_eq nth_list_update_eq nth_list_update_neq)
+   apply simp 
+  apply clarsimp 
+  proof -
+    fix k :: nat
+    assume a1: "\<forall>k>length xs - Suc i. k < length xs \<longrightarrow> arr_list s p (length xs) ! k = xs ! (length xs - Suc k)"
+    assume a2: "k < length xs"
+    assume a3: "length xs - Suc (Suc i) < k"
+    have f4: "\<forall>n na. \<not> (n::nat) \<le> na \<or> \<not> na < n"
+      using less_Suc_eq_le not_less_eq by presburger
+    then have f5: "length xs - Suc i = k \<or> \<not> k \<le> length xs - Suc i"
+      using a3 by (metis (no_types) leq_minus_split)
+    have f6: "i \<le> length xs"
+      using assms(1) by linarith
+    have f7: "Suc i \<le> length xs"
+      by (meson assms(1) less_Suc_eq_le less_imp_diff_less not_less_eq)
+    have "\<not> k \<le> i"
+      using f5 f4 by (meson assms(1) le_trans nat_less_le)
+      moreover
+      { assume "length xs - k \<noteq> i \<and> k \<noteq> i"
+        then have "(arr_list s p (length xs)) [i := xs ! (length xs - Suc i), length xs - Suc i := xs ! i] ! k = xs ! (length xs - Suc k) \<or> length xs - Suc i \<noteq> k \<and> k \<noteq> i"
+          using f6 f4 a2 by (metis (no_types) arr_list_length diff_diff_cancel length_list_update leq_minus_split nat_less_le not_less_eq_eq nth_list_update_eq) }
+      ultimately show "(arr_list s p (length xs)) [i := xs ! (length xs - Suc i), length xs - Suc i := xs ! i] ! k = xs ! (length xs - Suc k)"
+        using f7 f5 a2 a1 by (metis (no_types) diff_diff_cancel nat_le_linear nat_less_le not_less_eq_eq nth_list_update_neq)
+    qed
 
 text \<open> Show reverse is correct \<close>
+lemma heap_udpate_to_array:
+  "\<lbrakk> wellbehaved_pointers p n \<and> i \<le> n \<and> arr_is_valid s p n\<rbrakk> \<Longrightarrow>
+    arr_list (heap_w32_update (\<lambda>a. a(p +\<^sub>p int i := val)) s) p n 
+      = (arr_list s p n)[i := val]"
+  apply (clarsimp)
+  
+
+  oops 
 
 lemma reverse_correct:
   "\<lbrace> \<lambda>s. wellbehaved_pointers p n \<and>
@@ -325,8 +419,22 @@ lemma reverse_correct:
        reverse' p n
    \<lbrace> \<lambda>r s. arr_is_valid s p (length xs) \<and> 
            arr_list s p n = rev xs \<rbrace>!"
-  oops
+  unfolding reverse'_def
+  apply (subst whileLoop_add_inv[where
+        I="\<lambda> i s. 
+  reverse_inv xs (arr_list s p (length xs)) i (length xs - Suc i) \<and> 
+  i < length xs - Suc i \<and> arr_is_valid s p (length xs)\<and>
+  wellbehaved_pointers p n \<and>
+  length xs < UINT_MAX \<and>
+  arr_is_valid s p (length xs) \<and>
+  n = length xs \<and>
+  n > 0" 
+        and M ="\<lambda> (i , _ ) .  (length xs) - i "])
+  apply (wp ; clarsimp)+
+  apply (safe)
+  apply (simp_all)
   
-   
-
+  
+  
+  oops
 end
