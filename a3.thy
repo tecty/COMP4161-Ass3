@@ -401,16 +401,32 @@ lemma invariant_preservation:
 
 text \<open> Show reverse is correct \<close>
 
-lemma heap_update_to_list_update: 
-  assumes 
-    "is_valid_w32 s p" 
-  shows
-    "heap_w32 (heap_w32_update (\<lambda>a. a(p := val)) s) p  = val"
-  using assms 
-  by (simp add: fun_upd_same) 
+lemma inv_impl_mid: "reverse_inv xs xs' i j  \<Longrightarrow> middle_invariant xs xs' i j"
+  unfolding reverse_inv_def by blast 
 
-find_theorems arr_list
-  
+lemma mid_impl_access_origin: 
+  "\<lbrakk>middle_invariant xs xs' i j ; ine \<ge> i ;  ine \<le> j\<rbrakk> \<Longrightarrow> xs ! ine = xs'! ine"
+  unfolding middle_invariant_def by simp 
+
+
+lemma state_access_is_arr_access: 
+  "xs = arr_list s p n \<Longrightarrow> x < n \<and> x \<ge> 0 \<Longrightarrow> xs ! x = heap_w32 s (p +\<^sub>p int (x))"
+  by (simp add: arr_list_to_heap_lookup)
+
+lemma mid_impl_access_state_origin:
+  "\<lbrakk>i < j; i \<ge> 0; j < n;length xs = n;xs' = arr_list s p n;
+   middle_invariant xs xs' i j ; ine \<ge> i ;  ine \<le> j\<rbrakk>
+   \<Longrightarrow> heap_w32 s (p +\<^sub>p int (ine)) =  xs ! ine "
+  unfolding middle_invariant_def 
+  by (simp add: arr_list_to_heap_lookup)
+
+lemma "\<lbrakk>i < j; i \<ge> 0; j < n;length xs = n;xs' = arr_list s p n;
+   middle_invariant xs xs' i j ; ine \<ge> i ;  ine \<le> j; k \<ge>0 ; k < n \<rbrakk>
+  \<Longrightarrow> xs [k := heap_w32 s (p +\<^sub>p int (ine)) ] = xs [k := xs ! ine]" 
+  unfolding middle_invariant_def 
+  apply clarsimp 
+  apply (simp add: arr_list_to_heap_lookup)
+
 lemma reverse_correct:
   "\<lbrace> \<lambda>s. wellbehaved_pointers p n \<and>
          length xs < UINT_MAX \<and>
@@ -433,10 +449,11 @@ lemma reverse_correct:
   n = length xs \<and>
   n > 0" 
         and M ="\<lambda> (i , _ ) .  (length xs) - i "])
-  apply (wp ; clarsimp)+
-  apply (safe)
-  apply (auto simp add: arr_list_heap_update_simps)
-    
+  apply (wp | clarsimp)+
+       apply (auto simp add: arr_list_heap_update_simps)
+       prefer 2 
+  
+  
   
   
   
