@@ -477,15 +477,14 @@ lemma reverse_correct:
     apply (wp | clarsimp )+
       apply (auto simp add: arr_list_heap_update_simps)[2]
   using arr_is_valid_update_heap apply blast
-      apply (frule invariant_preservation) 
-  apply simp+
+       apply (frule invariant_preservation) 
+         apply simp+
        apply (frule inv_impl_mid, subst heap_to_arr_list_lookup[where ?n = "length xs"], fastforce+) +
-  apply (simp add: nat_minus_as_int reverse_invariant_def(2)) 
+       apply (simp add: nat_minus_as_int reverse_invariant_def(2)) 
      apply (simp add: pointer_add_simp)
   using arr_is_validD apply auto[1]
   using reverse.inv_impl_post apply auto[1]
-  apply wp 
-  apply clarsimp 
+   apply (wp| clarsimp)
   using reverse.pre_impl_inv(2) by fastforce
 
 end
