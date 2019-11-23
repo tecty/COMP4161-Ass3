@@ -420,12 +420,33 @@ lemma mid_impl_access_state_origin:
   unfolding middle_invariant_def 
   by (simp add: arr_list_to_heap_lookup)
 
-lemma "\<lbrakk>i < j; i \<ge> 0; j < n;length xs = n;xs' = arr_list s p n;
+lemma mid_impl_access_heap : "\<lbrakk>
+  i < j; i \<ge> 0; j < n;length xs = n;xs' = arr_list s p n;n < UINT_MAX;
    middle_invariant xs xs' i j ; ine \<ge> i ;  ine \<le> j; k \<ge>0 ; k < n \<rbrakk>
   \<Longrightarrow> xs [k := heap_w32 s (p +\<^sub>p int (ine)) ] = xs [k := xs ! ine]" 
   unfolding middle_invariant_def 
   apply clarsimp 
-  apply (simp add: arr_list_to_heap_lookup)
+  by (simp add: arr_list_to_heap_lookup)
+
+lemma pointer_add_simp:
+  fixes r :: nat
+    and s :: lifted_globals
+  assumes a1: "r < length xs - Suc r"
+  assumes a2: "n = length xs"
+  assumes a3: "arr_is_valid s p (length xs)"
+  shows "is_valid_w32 s (p +\<^sub>p (int (length xs) - (1 + int r)))" 
+  proof - 
+    have f4: "r < n - Suc r"
+      using a2 a1 by meson
+    then have "Suc r < n"
+      by linarith
+    then have f5: "\<not> n < Suc r"
+      by linarith
+    have "n - Suc r < n"
+      using f4 by linarith
+    then show "is_valid_w32 s (p +\<^sub>p (int (length xs) - (1 + int r)))"
+      using f5 a3 a2 by (metis (no_types) add_diff_cancel_left' add_diff_inverse_nat arr_is_validD of_nat_Suc of_nat_add)
+  qed 
 
 lemma reverse_correct:
   "\<lbrace> \<lambda>s. wellbehaved_pointers p n \<and>
@@ -439,23 +460,32 @@ lemma reverse_correct:
    \<lbrace> \<lambda>r s. arr_is_valid s p (length xs) \<and> 
            arr_list s p n = rev xs \<rbrace>!"
   unfolding reverse'_def
-  apply (subst whileLoop_add_inv[where
-        I="\<lambda> i s. 
-  reverse_inv xs (arr_list s p (length xs)) i (length xs - Suc i) \<and> 
-  i < length xs - Suc i \<and> arr_is_valid s p (length xs)\<and>
-  wellbehaved_pointers p n \<and>
-  length xs < UINT_MAX \<and>
-  arr_is_valid s p (length xs) \<and>
-  n = length xs \<and>
-  n > 0" 
-        and M ="\<lambda> (i , _ ) .  (length xs) - i "])
   apply (wp | clarsimp)+
-       apply (auto simp add: arr_list_heap_update_simps)
-       prefer 2 
-  
-  
-  
-  
-  
-  oops
+    apply (rule_tac
+      I= "\<lambda> i s. 
+        wellbehaved_pointers p n \<and>
+        n = length xs \<and>
+        n < UINT_MAX \<and>
+        n > 0 \<and>
+        i < n \<and>
+        n - i - 1 < n \<and>
+        arr_is_valid s p (length xs) \<and>
+        reverse_inv xs (arr_list s p n) i (length xs - i - 1) 
+      "
+      and M = "\<lambda> (i,_) . length xs - i"
+      in whileLoop_add_invI)
+    apply (wp | clarsimp )+
+      apply (auto simp add: arr_list_heap_update_simps)[2]
+  using arr_is_valid_update_heap apply blast
+      apply (frule invariant_preservation) 
+  apply simp+
+       apply (frule inv_impl_mid, subst heap_to_arr_list_lookup[where ?n = "length xs"], fastforce+) +
+  apply (simp add: nat_minus_as_int reverse_invariant_def(2)) 
+     apply (simp add: pointer_add_simp)
+  using arr_is_validD apply auto[1]
+  using reverse.inv_impl_post apply auto[1]
+  apply wp 
+  apply clarsimp 
+  using reverse.pre_impl_inv(2) by fastforce
+
 end
